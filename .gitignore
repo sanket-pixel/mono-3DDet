@@ -1,1 +1,6 @@
 **/data/**
+.vscode/
+checkpoints/
+config/
+**/__pycache__/**
+outputs/

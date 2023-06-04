@@ -82,7 +82,7 @@ class Visualizer:
             color = CLASS_IDX_TO_COLOR[c_idx]
             for box in pred_bbox:
                 s = np.reciprocal(np.array([*self.scale_hw[::-1], *self.scale_hw[::-1]]))
-                box = (box[:-1] * s).astype(np.int)
+                box = (box[:-1] * s).astype(np.int_)
                 image = self._add_transparent_box(image, box, color, alpha=0.2)
         
         if save_path is not None:
@@ -123,7 +123,7 @@ class Visualizer:
                 proj_corners = points_cam2img(corners, intrinsic_mat)                           # (8, 2)
                 
                 s = np.reciprocal(self.scale_hw[::-1])
-                proj_corners = ((proj_corners - 1).round() * s).astype(np.int)                  # (8, 2)
+                proj_corners = ((proj_corners - 1).round() * s).astype(np.int_)                  # (8, 2)
                 
                 color = CLASS_IDX_TO_COLOR[label_3d.item()]
                 for start, end in line_indices:

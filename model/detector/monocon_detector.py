@@ -78,7 +78,7 @@ class MonoConDetector(nn.Module):
     
     
     def load_checkpoint(self, ckpt_file: str):
-        model_dict = torch.load(ckpt_file)['state_dict']['model']
+        model_dict = torch.load(ckpt_file, map_location="cuda:0")['state_dict']['model']
         self.load_state_dict(model_dict)
 
 
