@@ -160,6 +160,17 @@ class MonoConDenseHeads(nn.Module):
     # Get predictions for test
     def forward_test(self, feat: torch.Tensor) -> Dict[str, torch.Tensor]:
         return self._get_predictions(feat)
+    
+    def forward_engine(self, feat,calib,viewpad,img_shape):
+        pred_dict =  self._get_predictions(feat)
+        # what all do we need to go from head outputs to 3D Detection?
+        # 1. pad_shape
+        # 2. calib matrix
+        
+        bboxes_2d, bboxes_3d, labels = self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
+        # Convert origin of 'bboxes_3d' from (0.5, 0.5, 0.5) to (0.5, 1.0, 0.5)
+        bboxes_3d[:,:,1] += bboxes_3d[:,:,4]*0.5
+        return bboxes_2d, bboxes_3d, labels
 
 
     def _get_predictions(self, feat: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -328,6 +339,24 @@ class MonoConDenseHeads(nn.Module):
             bboxes_3d[box_idx] = bbox_3d
         return bboxes_2d, bboxes_3d, labels
     
+   
+    # def _get_bboxes_engine(self, 
+    #                 pred_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor]:
+        
+    #     bboxes_2d, bboxes_3d, labels = self.decode_heatmap(data_dict, pred_dict)
+        
+    #     # Convert origin of 'bboxes_3d' from (0.5, 0.5, 0.5) to (0.5, 1.0, 0.5)
+    #     for box_idx in range(len(bboxes_3d)):
+            
+    #         bbox_3d = bboxes_3d[box_idx]            # (K, 7)
+            
+    #         dst = bbox_3d.new_tensor((0.5, 1.0, 0.5))
+    #         src = bbox_3d.new_tensor((0.5, 0.5, 0.5))
+            
+    #         bbox_3d[:, :3] += (bbox_3d[:, 3:6] * (dst - src))
+    #         bboxes_3d[box_idx] = bbox_3d
+    #     return bboxes_2d, bboxes_3d, labels
+    
     
     # Data used for kitti evaluation
     def _get_eval_formats(self,
@@ -480,7 +509,85 @@ class MonoConDenseHeads(nn.Module):
             for label, mask in zip(topk_labels, box_mask)]
         
         return ret_bboxes_2d, ret_bboxes_3d, ret_labels
+    
+    def decode_heatmap_engine(self, 
+                       calib,viewpad, img_shape,
+                       pred_dict: Dict[str, torch.Tensor]) -> Tuple[List[torch.Tensor]]:
         
+        img_h, img_w = img_shape
+        
+        center_heatmap_pred = pred_dict['center_heatmap_pred']
+        batch, _, feat_h, feat_w = center_heatmap_pred.shape
+        center_heatmap_pred = get_local_maximum(
+            center_heatmap_pred, 
+            kernel=self.local_maximum_kernel)
+        
+        # (B, K)
+        scores, indices, topk_labels, ys, xs = \
+            get_topk_from_heatmap(center_heatmap_pred, k=self.topk)
+        
+        # Get 2D Predictions from Predicted Heatmap
+        wh = transpose_and_gather_feat(pred_dict['wh_pred'], indices)               # (B, K, 2)
+        offset = transpose_and_gather_feat(pred_dict['offset_pred'], indices)       # (B, K, 2)
+        
+        topk_xs = xs + offset[..., 0]
+        topk_ys = ys + offset[..., 1]
+        
+        x1 = (topk_xs - wh[..., 0] / 2.) * (img_w / feat_w)
+        y1 = (topk_ys - wh[..., 1] / 2.) * (img_h / feat_h)
+        x2 = (topk_xs + wh[..., 0] / 2.) * (img_w / feat_w)
+        y2 = (topk_ys + wh[..., 1] / 2.) * (img_h / feat_h)
+        
+        bboxes_2d = torch.stack([x1, y1, x2, y2], dim=2)
+        bboxes_2d = torch.cat([bboxes_2d, scores[..., None]], dim=-1)               # (B, K, 5)
+        
+        
+        # Get 3D Predictions from Predicted Heatmap
+        # 'sigma' represents uncertainty.
+        
+        # Convert bin class and offset to alpha.
+        alpha_cls = transpose_and_gather_feat(pred_dict['alpha_cls_pred'], indices)         # (B, K, 12)
+        alpha_offset = transpose_and_gather_feat(pred_dict['alpha_offset_pred'], indices)   # (B, K, 12)
+        alpha = self.decode_alpha(alpha_cls, alpha_offset)                                  # (B, K, 1)
+        
+        depth_pred = transpose_and_gather_feat(pred_dict['depth_pred'], indices)            # (B, K, 2)
+        sigma = torch.exp(-depth_pred[:, :, 1])                                             # (B, K)
+        bboxes_2d[..., -1] = (bboxes_2d[..., -1] * sigma)
+        
+        center2kpt_offset = transpose_and_gather_feat(
+            pred_dict['center2kpt_offset_pred'],
+            indices)
+        center2kpt_offset = center2kpt_offset.view(batch, self.topk, (self.num_kpts * 2))[..., -2:]     # (B, K, 2)
+        
+        x_offset = xs.view(batch, self.topk, 1)
+        x_scale = (img_w / feat_w)
+        
+        y_offset = ys.view(batch, self.topk, 1)
+        y_scale = (img_h / feat_h)
+        
+        center2kpt_offset[..., ::2] = (center2kpt_offset[..., ::2] + x_offset) * x_scale
+        center2kpt_offset[..., 1::2] = (center2kpt_offset[..., 1::2] + y_offset) * y_scale
+        
+        center2d = center2kpt_offset
+        rot_y = self.calculate_roty_engine(center2d, alpha,calib)      # (B, K, 1)
+        
+        depth = depth_pred[:, :, 0:1]                                                           # (B, K, 1)
+        center3d = torch.cat([center2d, depth], dim=-1)                                         # (B, K, 3)
+        center3d = self.convert_pts2D_to_pts3D_engine(center3d, viewpad)      # (B, K, 3)
+        
+        dim = transpose_and_gather_feat(pred_dict['dim_pred'], indices)
+        bboxes_3d = torch.cat([center3d, dim, rot_y], dim=-1)
+        
+        box_mask = (bboxes_2d[..., -1] > self.test_thres)                                   # (B, K)
+        
+        # Decoded Results
+        ret_bboxes_2d = bboxes_2d[:,box_mask.squeeze(0),:]
+        
+        ret_bboxes_3d = bboxes_3d[:,box_mask.squeeze(0),:]
+        
+        ret_labels = topk_labels[:,box_mask.squeeze(0)]
+        
+        return ret_bboxes_2d, ret_bboxes_3d, ret_labels
 
     def calculate_roty(self, 
                        kpts: torch.Tensor, 
@@ -556,7 +663,71 @@ class MonoConDenseHeads(nn.Module):
             
         points_3d = torch.cat(points_3d_result, dim=0)                      # (B, K, 3)
         return points_3d
+    
+    def convert_pts2D_to_pts3D_engine(self, 
+                               points_2d: torch.Tensor, 
+                              viewpad) -> torch.Tensor:
+        
+        """
+        * Args:
+            - 'points_2d'
+                torch.Tensor / (B, K, 3)
+            - 'batched_calib'
+                List[KITTICalibration] / Length: B
+        """        
+        # 'points_2d': (B, K, 3)
+        centers = points_2d[:, :, :2]                                       # (B, K, 2)
+        depths = points_2d[:, :, 2:3]                                       # (B, K, 1)
+        unnorm_points = torch.cat([(centers * depths), depths], dim=-1)     # (B, K, 3)
+        
+        points_3d_result = []
+        extra_ones = torch.ones_like(depths)
+        homo_points = torch.cat([unnorm_points,extra_ones],2)
+        # 'unnorm_point': (K, 3)
+        # inv_viewpad = torch.linalg.inv(viewpad).transpose(0, 1).to(points_2d.device)
+        # Q, R = torch.linalg.qr(viewpad)
+        # I = torch.eye(viewpad.shape[0], dtype=torch.float32)
+        # inv_viewpad = torch.linalg.solve(R, Q.t() @ I)
+        # Do operation in homogenous coordinates.
+        points_3d = torch.matmul(homo_points, viewpad.cuda())[:,:, :3]           # (K, 4) * (4, 4) = (K, 4) -> (K, 3)
+        
+        # points_3d_result.append(points_3d.unsqueeze(0))                 # (1, K, 4)
+            
+        # points_3d = torch.cat(points_3d_result, dim=0)                      # (B, K, 3)
+        
+        return points_3d
 
+    
+    def calculate_roty_engine(self, 
+                       kpts: torch.Tensor, 
+                       alpha: torch.Tensor,
+                    calib) -> torch.Tensor:
+        
+        """
+        * Args:
+            - 'kpts'
+                torch.Tensor / (B, K, 2)
+            - 'alpha'
+                torch.Tensor / (B, K, 1)
+            - 'batched_calib'
+                List[KITTICalibration] / Length: B
+        """
+        
+        device = kpts.device
+        calib = calib.unsqueeze(0)
+        
+        # kpts[:, :, 0:1]       -> (B, K, 1)
+        # calib[:, 0:1, 0:1]    -> (B, 1, 1)
+
+        si = torch.zeros_like(kpts[:, :, 0:1]) + calib[:, 0:1, 0:1]
+        rot_y = alpha + torch.atan(kpts[:, :, 0:1] - calib[:, 0:1, 2:3]/ si)
+
+        while (rot_y > PI).any():
+            rot_y[rot_y > PI] = rot_y[rot_y > PI] - 2 * PI
+        while (rot_y < -PI).any():
+            rot_y[rot_y < -PI] = rot_y[rot_y < -PI] + 2 * PI
+
+        return rot_y
 
     def bbox_2d_to_result(self, 
                           bboxes_2d: torch.Tensor, 

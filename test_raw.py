@@ -54,10 +54,19 @@ tprint(f"Checkpoint '{args.checkpoint_file}' is loaded to model.")
 vis_results = []
 
 with torch.no_grad():
+
     for data in tqdm(dataset, desc="Collecting Results..."):
         data = move_data_device(data, device)
-        vis_result = detector.batch_eval(data, get_vis_format=True)
-        vis_results.extend(vis_result)
+        calib = torch.from_numpy(data['calib'][0].P2).cuda()
+        img_shape = data['img_metas']['pad_shape'][0]
+        img = data['img']
+        viewpad = torch.eye(4)
+        viewpad[:calib.shape[0], :calib.shape[1]] = calib
+        inv_viewpad = torch.linalg.inv(viewpad).transpose(0, 1).cuda()
+        bboxes_2d, bboxes_3d, labels = detector(img, calib, inv_viewpad, img_shape)
+
+        # vis_result = detector.batch_eval(data, get_vis_format=True)
+        # vis_results.extend(vis_result)
     
 
 # (4) Visualize

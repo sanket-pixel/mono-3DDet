@@ -4,3 +4,5 @@ checkpoints/
 config/
 **/__pycache__/**
 outputs/
+**.onnx
+**.engine

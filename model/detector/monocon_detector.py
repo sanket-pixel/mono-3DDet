@@ -50,19 +50,19 @@ class MonoConDetector(nn.Module):
         self.head = MonoConDenseHeads(in_ch=head_in_ch, test_config=test_config, **head_config)
         
         
-    def forward(self, data_dict: Dict[str, Any], return_loss: bool = True) -> Tuple[Dict[str, torch.Tensor]]:
+    def forward(self,img, calib, viewpad, img_shape,return_loss=False ):
         
-        feat = self._extract_feat_from_data_dict(data_dict)
+        feat = self._extract_feat_from_data_dict(img)
         
         if self.training:
-            pred_dict, loss_dict = self.head.forward_train(feat, data_dict)
+            pred_dict, loss_dict = self.head.forward_train(feat, img)
             if return_loss:
                 return pred_dict, loss_dict
             return pred_dict
         
         else:
-            pred_dict = self.head.forward_test(feat)
-            return pred_dict
+            bboxes_2d, bboxes_3d, labels = self.head.forward_engine(feat, calib,viewpad, img_shape)
+            return bboxes_2d, bboxes_3d, labels
         
     
     def batch_eval(self, 
@@ -82,6 +82,5 @@ class MonoConDetector(nn.Module):
         self.load_state_dict(model_dict)
 
 
-    def _extract_feat_from_data_dict(self, data_dict: Dict[str, Any]) -> torch.Tensor:
-        img = data_dict['img']
+    def _extract_feat_from_data_dict(self, img):
         return self.neck(self.backbone(img))[0]
