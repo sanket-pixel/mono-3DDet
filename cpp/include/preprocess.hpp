@@ -15,6 +15,6 @@ class MonoconPreProcessor{
 
         }
         // void initialize_globals(int resized_width, int resized_height);
-        void normalization(cv::Mat input_image);
+        void normalization(cv::Mat input_image, cv::Mat &output_image);
         // void norm_scaling(cv::Mat &normalised_image, cv::Scalar norm_sub, cv::Scalar norm_div);
 };

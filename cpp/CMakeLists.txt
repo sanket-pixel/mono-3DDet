@@ -39,6 +39,7 @@ link_directories( ${TensorRT_DIR}/lib)
 
 # add post processor
 add_library(pre_processor  src/preprocess.cpp)
+set_target_properties(pre_processor PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(pre_processor PUBLIC include)
 
 # add common 

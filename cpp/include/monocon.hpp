@@ -24,14 +24,14 @@
 #include <sstream>
 #include <chrono>
 #include <NvInferRuntime.h>
-
+#include "preprocess.hpp"
 
 using namespace nvinfer1;
 
 struct Params{
     struct EngineParams{
-    std::string OnnxFilePath = "/home/sanket/Desktop/Projects/mono-3DDet/deploy_tools/monocon.onnx";
-    std::string SerializedEnginePath = "/home/sanket/Desktop/Projects/mono-3DDet/deploy_tools/monocon.engine";
+    std::string OnnxFilePath = "../../deploy_tools/monocon.onnx";
+    std::string SerializedEnginePath = "../../deploy_tools/monocon.engine";
 
     // Input Output Names
     std::vector<std::string> InputTensorNames;
@@ -51,8 +51,8 @@ struct Params{
     } engineParams;
 
     struct IOPathsParams{
-        std::string image_path = "/home/sanket/Desktop/Projects/mono-3DDet/data/KITTI_raw/scene_1/image_02/data/0000000000.png";
-        std::string calib_patth = "/home/sanket/Desktop/Projects/mono-3DDet/data/KITTI_raw/scene_1/calib/calib_cam_to_cam.txt";
+        std::string image_path = "../../data/sample.png";
+        std::string calib_path = "../../data/calib_cam_to_cam.txt";
     
     } ioPathsParams;
 
