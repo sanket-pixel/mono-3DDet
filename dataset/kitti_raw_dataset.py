@@ -14,9 +14,9 @@ from utils.engine_utils import tprint
 
 default_raw_transforms = [
     Normalize(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], keep_origin=True),
-    Pad(size_divisor=32),
-    ToTensor(),
-    Convert_3D_to_4D(),
+    # Pad(size_divisor=32),
+    # ToTensor(),
+    # Convert_3D_to_4D(),
 ]
 
 

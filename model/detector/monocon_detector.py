@@ -50,8 +50,9 @@ class MonoConDetector(nn.Module):
         self.head = MonoConDenseHeads(in_ch=head_in_ch, test_config=test_config, **head_config)
         
         
-    def forward(self,img, calib, viewpad, img_shape,return_loss=False ):
+    def forward(self,img, calib, viewpad,return_loss=False ):
         
+        img_shape = img.shape[2], img.shape[3]
         feat = self._extract_feat_from_data_dict(img)
         
         if self.training:

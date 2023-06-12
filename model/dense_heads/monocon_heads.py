@@ -581,13 +581,13 @@ class MonoConDenseHeads(nn.Module):
         box_mask = (bboxes_2d[..., -1] > self.test_thres)                                   # (B, K)
         
         # Decoded Results
-        ret_bboxes_2d = bboxes_2d[:,box_mask.squeeze(0),:]
+        # ret_bboxes_2d = bboxes_2d[:,box_mask.squeeze(0),:]
         
-        ret_bboxes_3d = bboxes_3d[:,box_mask.squeeze(0),:]
+        # ret_bboxes_3d = bboxes_3d[:,box_mask.squeeze(0),:]
         
-        ret_labels = topk_labels[:,box_mask.squeeze(0)]
+        # ret_labels = topk_labels[:,box_mask.squeeze(0)]
         
-        return ret_bboxes_2d, ret_bboxes_3d, ret_labels
+        return bboxes_2d, bboxes_3d, topk_labels
 
     def calculate_roty(self, 
                        kpts: torch.Tensor, 
