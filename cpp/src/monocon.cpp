@@ -172,6 +172,48 @@ cv::Mat Monocon::read_image(std::string image_path){
     return cv::imread(image_path,cv::IMREAD_COLOR);
 }
 
+Eigen::Matrix<float, 3, 4> Monocon::read_calibration_file(std::string calib_path)
+{
+    std::ifstream file(calib_path);
+    std::string line;
+    Eigen::Matrix<float, 3, 4> calibrationMatrix;
+
+    while (std::getline(file, line))
+    {
+        if (line.find("P_rect_02:") != std::string::npos)
+        {
+            std::istringstream iss(line);
+            std::string keyword;
+            float value;
+
+            iss >> keyword;  // Read the keyword
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    iss >> value;  // Read the matrix values
+                    calibrationMatrix(i, j) = value;
+                }
+            }
+
+            break;  // Exit the loop after finding the calibration matrix
+        }
+    }
+
+    return calibrationMatrix;
+}
+
+Eigen::Matrix4f Monocon::invertCalib(const Eigen::Matrix<float, 3, 4>& calib)
+{
+    Eigen::Matrix4f matrix;
+    matrix.block<3, 4>(0, 0) = calib;
+    matrix.row(3) << 0, 0, 0, 1;
+
+
+    Eigen::Matrix4f invertedMatrix = matrix.inverse();
+    return invertedMatrix;
+}
+
 bool Monocon::preprocess(cv::Mat img, cv::Mat &preprocessed_img ){
     std::cout << img.size() << std::endl;
     std::cout << mParams.modelParams.resized_image_size_width << " "  <<  mParams.modelParams.resized_image_size_height <<std::endl;
@@ -197,8 +239,17 @@ void Monocon::get_bindings(){
     cv::Mat img = read_image(mParams.ioPathsParams.image_path);
     cv::Mat preprocessed_image;
     Monocon::preprocess(img, preprocessed_image);
-    std::cout << preprocessed_image.at<cv::Vec3f>(0,0)[0] <<std::endl;
-    // Monocon::enqueue_input(host_buffer, preprocessed_image);
+    Eigen::Matrix<float, 3, 4> calib = read_calibration_file(mParams.ioPathsParams.calib_path);
+    std::cout << "Matrix:\n" << calib << std::endl;
+
+    Eigen::Matrix4f invertedMatrix = invertCalib(calib);
+
+    std::cout << "Matrix:\n" << invertedMatrix << std::endl;
+
+
+   
+
+
 
    
 

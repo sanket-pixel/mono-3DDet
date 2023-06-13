@@ -14,6 +14,11 @@ include_directories(
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+# eigen 
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIRS})
+link_directories(${EIGEN3_LIBRARY_DIRS})
+
 #cuda:
 find_package(CUDA 11.1 REQUIRED)
 include_directories(${CUDA_INCLUDE_DIRS})
@@ -51,7 +56,7 @@ target_include_directories(common PUBLIC  ${TensorRT_DIR}/include ${TensorRT_DIR
 # make monocon library
 add_library(monocon SHARED src/monocon.cpp)
 target_include_directories(monocon PUBLIC ${TensorRT_DIR}/include)
-target_link_libraries(monocon PUBLIC pre_processor nvinfer nvonnxparser stdc++fs ${CUDA_LIBRARIES} ${OpenCV_LIBS} common)
+target_link_libraries(monocon PUBLIC pre_processor nvinfer nvonnxparser stdc++fs  ${EIGEN3_LIBRARIES} ${CUDA_LIBRARIES} ${OpenCV_LIBS} common)
 set_target_properties(monocon PROPERTIES INSTALL_RPATH "$ORIGIN")
 
 add_executable(main src/main.cpp)

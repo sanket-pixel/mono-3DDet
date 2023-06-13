@@ -29,19 +29,15 @@ void MonoconPreProcessor::normalization(cv::Mat input_image, cv::Mat &output_ima
 
 void MonoconPreProcessor::padding(cv::Mat input_image, cv::Mat &output_image){
 
-    // std::cout << _resized_width << std::endl;
-    // Calculate the amount of padding required on the bottom and left
-    int paddingVertical = _resized_height - input_image.rows;
-    int paddingHorizontal = _resized_width - input_image.cols;
+    int top = 0;
+    int bottom = _resized_height - input_image.rows;
+    int left = 0;
+    int right = _resized_width - input_image.cols;
 
-    // Pad the image with zeros
-    cv::copyMakeBorder(input_image, output_image, 0, paddingVertical, paddingHorizontal, 0, cv::BORDER_CONSTANT, 0);
+    cv::Scalar paddingColor = cv::Scalar(0, 0, 0);
 
-    // Verify the size of the padded image
-    std::cout << "Padded image size: " << output_image.size() << std::endl;
-    cv::imshow("Padded Image", output_image);
-    cv::waitKey(0);
-    
+    cv::copyMakeBorder(input_image, output_image, top, bottom, left, right, cv::BORDER_CONSTANT, paddingColor);
+
 
 }
 
