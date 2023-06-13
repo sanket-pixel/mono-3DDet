@@ -30,7 +30,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_50 --expt-extended-lambda -D_
 # tensorrt
 set(TensorRT_DIR "/home/sanket/libs/TensorRT-8.6.1.6")
 link_directories( ${TensorRT_DIR}/lib)
-# include_directories( ${TensorRT_DIR}/include)
+include_directories( ${TensorRT_DIR}/include)
 
 
 # # add pre processor library

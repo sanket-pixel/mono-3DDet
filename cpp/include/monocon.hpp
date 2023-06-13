@@ -94,6 +94,7 @@ class Monocon{
         // // Manager Function
         // bool measure_latency();
         void get_bindings();
+
         // std::vector<std::vector<float>> get_bindings();
 
     private:
@@ -105,12 +106,11 @@ class Monocon{
         std::shared_ptr<nvinfer1::IRuntime> mRuntime; //!< The TensorRT runtime used to deserialize the engine
         std::shared_ptr<nvinfer1::ICudaEngine> mEngine; //!< The TensorRT engine used to run the network
 
-
         // Parses an ONNX model for Monocon and creates a TensorRT network
         bool constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
             SampleUniquePtr<nvinfer1::INetworkDefinition>& network, SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
             SampleUniquePtr<nvonnxparser::IParser>& parser);
-        
+         MonoconPreProcessor monocon_preprocessor{mParams.modelParams.resized_image_size_width, mParams.modelParams.resized_image_size_height};
         // Inference related functions
         cv::Mat read_image(std::string image_path);
         bool preprocess(cv::Mat img, cv::Mat &preprocessed_img );

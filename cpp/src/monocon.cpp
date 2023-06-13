@@ -173,15 +173,12 @@ cv::Mat Monocon::read_image(std::string image_path){
 }
 
 bool Monocon::preprocess(cv::Mat img, cv::Mat &preprocessed_img ){
-    MonoconPreProcessor monocon_preprocess(mParams.modelParams.resized_image_size_width,
-                                           mParams.modelParams.resized_image_size_height);
-    monocon_preprocess.normalization(img, preprocessed_img);
+    std::cout << img.size() << std::endl;
+    std::cout << mParams.modelParams.resized_image_size_width << " "  <<  mParams.modelParams.resized_image_size_height <<std::endl;
+    monocon_preprocessor.normalization(img, preprocessed_img);
+    monocon_preprocessor.padding(preprocessed_img, preprocessed_img);
     
-    // monocon_preprocess.initialize_globals(input_dims.d[3],input_dims.d[2]);
-    // monocon_preprocess.basic_preprocessing(img, preprocessed_img);
-    // monocon_preprocess.norm_scaling(preprocessed_img, cv::Scalar(0.485f, 0.456f, 0.406f),
-    //                                         cv::Scalar(0.229f, 0.224f, 0.225f));
-
+    
 }
 
 
@@ -198,7 +195,6 @@ void Monocon::get_bindings(){
 
     // // Read image from Disk 
     cv::Mat img = read_image(mParams.ioPathsParams.image_path);
-    std::cout << img.size() << std::endl;
     cv::Mat preprocessed_image;
     Monocon::preprocess(img, preprocessed_image);
     std::cout << preprocessed_image.at<cv::Vec3f>(0,0)[0] <<std::endl;
