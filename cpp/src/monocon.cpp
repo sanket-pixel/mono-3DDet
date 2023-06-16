@@ -158,8 +158,8 @@ bool Monocon::buildFromSerializedEngine(){
     mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(
             mRuntime->deserializeCudaEngine(engineData.get(), engineSize));   
 
-    // std::cout << "Input Image " << mEngine->getBindingDimensions(0) << std::endl; 
-    // std::cout << "Calib  " << mEngine->getBindingDimensions(1) << std::endl; 
+    std::cout << "Input Image " << mEngine->getBindingDimensions(0) << std::endl; 
+    std::cout << "Calib  " << mEngine->getBindingDimensions(1) << std::endl; 
     // std::cout << "Calib Inv " << mEngine->getBindingDimensions(2) << std::endl; 
     // std::cout << "bboxes labels " << mEngine->getBindingDimensions(3) << std::endl; 
     // std::cout << "bboxes 2d " << mEngine->getBindingDimensions(4) << std::endl; 
@@ -170,6 +170,41 @@ bool Monocon::buildFromSerializedEngine(){
 
 cv::Mat Monocon::read_image(std::string image_path){
     return cv::imread(image_path,cv::IMREAD_COLOR);
+}
+
+bool Monocon::enqueue_input(float* host_buffer, cv::Mat image){
+    nvinfer1::Dims input_dims = mEngine->getBindingDimensions(0);
+    for (size_t batch = 0; batch < 1; ++batch) {
+  
+        int offset = input_dims.d[1] * input_dims.d[2] * input_dims.d[3] * batch;
+        int r = 0 , g = 0, b = 0;
+        
+        for (int i = 0; i < input_dims.d[1] * input_dims.d[2] * input_dims.d[3]; ++i) {
+            if (i % 3 == 0) {
+                host_buffer[offset + r++] = *(reinterpret_cast<float*>(image.data) + i);
+            } else if (i % 3 == 1) {
+                host_buffer[offset + g++ + input_dims.d[2] * input_dims.d[3]] = *(reinterpret_cast<float*>(image.data) + i);
+            } else {
+                host_buffer[offset + b++ + input_dims.d[2] * input_dims.d[3] * 2] = *(reinterpret_cast<float*>(image.data) + i);
+            }
+        }
+    }    
+}
+
+std::vector<float*> Monocon::dequeue_boxes(float* output_flattened){
+    const int num_boxes = mEngine->getBindingDimensions(5).d[1];
+    const int dims_boxes = mEngine->getBindingDimensions(5).d[2];
+    int counter = 0;
+    std::vector<float*> boxes_vector;
+    for (int i = 0; i < num_boxes; i++) {
+        float* box = new float[dims_boxes];
+        for (int j = 0; j < dims_boxes; j++){
+            box[j] = output_flattened[counter];
+            counter++;
+        }
+        boxes_vector.push_back(box);
+    }
+    return boxes_vector;
 }
 
 Eigen::Matrix<float, 3, 4> Monocon::read_calibration_file(std::string calib_path)
@@ -216,10 +251,10 @@ Eigen::Matrix4f Monocon::invertCalib(const Eigen::Matrix<float, 3, 4>& calib)
 
 bool Monocon::preprocess(cv::Mat img, cv::Mat &preprocessed_img ){
     std::cout << img.size() << std::endl;
-    std::cout << mParams.modelParams.resized_image_size_width << " "  <<  mParams.modelParams.resized_image_size_height <<std::endl;
     monocon_preprocessor.normalization(img, preprocessed_img);
     monocon_preprocessor.padding(preprocessed_img, preprocessed_img);
-    
+    std::cout << preprocessed_img.size() << std::endl;
+
     
 }
 
@@ -229,27 +264,43 @@ void Monocon::get_bindings(){
    
     // Create the execution context
     auto context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
-
-    // // Populate host buffer with input image.
-    // samplesCommon::BufferManager bufferManager{mEngine};
-    // float* host_buffer = (float*)bufferManager.getHostBuffer("input");
-
+    samplesCommon::BufferManager bufferManager{mEngine};
 
     // // Read image from Disk 
-    cv::Mat img = read_image(mParams.ioPathsParams.image_path);
-    cv::Mat preprocessed_image;
-    Monocon::preprocess(img, preprocessed_image);
-    Eigen::Matrix<float, 3, 4> calib = read_calibration_file(mParams.ioPathsParams.calib_path);
-    std::cout << "Matrix:\n" << calib << std::endl;
+    // float* host_buffer_image = (float*)bufferManager.getHostBuffer("image");
+    // cv::Mat img = read_image(mParams.ioPathsParams.image_path);
+    // cv::Mat preprocessed_image;
+    // Monocon::preprocess(img, preprocessed_image);
+    // // Populate host buffer with input image.
+    // enqueue_input(host_buffer_image, preprocessed_image);
 
-    Eigen::Matrix4f invertedMatrix = invertCalib(calib);
+    // // // Read calibration matrix
+    // float* host_buffer_calib = (float*)bufferManager.getHostBuffer("calib");
+    // Eigen::Matrix<float, 3, 4> calib = read_calibration_file(mParams.ioPathsParams.calib_path);
+    // size_t buffer_size_calib = bufferManager.size("calib");
+    // std::memcpy(host_buffer_calib, calib.data(), buffer_size_calib);
 
-    std::cout << "Matrix:\n" << invertedMatrix << std::endl;
+    // // invert calib 
+    // float* host_buffer_inv_calib = (float*)bufferManager.getHostBuffer("calib_inv");
+    // Eigen::Matrix4f invertedMatrix = invertCalib(calib);
+    // size_t buffer_size_inv_calib = bufferManager.size("calib_inv");
+    // std::memcpy(host_buffer_inv_calib, invertedMatrix.data(), buffer_size_inv_calib);
 
+     // Copy input from host to device
+    bufferManager.copyInputToDevice();
 
-   
+     // Perform inference
+    bool status_0 = context->executeV2(bufferManager.getDeviceBindings().data()); 
 
+     // Copy output to host
+    // bufferManager.copyOutputToHost(); 
 
+    //  // convert boxes to vector
+    // float* output_flattened = static_cast<float*>(bufferManager.getHostBuffer("bboxes_3d"));
+    // std::vector<float*> boxes_vector = dequeue_boxes(output_flattened);
+    // std::cout << boxes_vector.at(0)[0] << std::endl;
+    
+    
 
    
 

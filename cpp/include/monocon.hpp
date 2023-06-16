@@ -53,8 +53,8 @@ struct Params{
     } engineParams;
 
     struct IOPathsParams{
-        std::string image_path = "../data/sample.png";
-        std::string calib_path = "../data/calib_cam_to_cam.txt";
+        std::string image_path = "../../data/sample.png";
+        std::string calib_path = "../../data/calib_cam_to_cam.txt";
     
     } ioPathsParams;
 
@@ -118,8 +118,8 @@ class Monocon{
         Eigen::Matrix<float, 3, 4> read_calibration_file(std::string calib_path);
         Eigen::Matrix4f invertCalib(const Eigen::Matrix<float, 3, 4>& calib);
         bool preprocess(cv::Mat img, cv::Mat &preprocessed_img );
-        // bool enqueue_input(float* host_buffer, cv::Mat preprocessed_img);
-        // std::vector<float*> dequeue_boxes(float* output_flattened);
+        bool enqueue_input(float* host_buffer, cv::Mat preprocessed_img);
+        std::vector<float*> dequeue_boxes(float* output_flattened);
 
 };
 

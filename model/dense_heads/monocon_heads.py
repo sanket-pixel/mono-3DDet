@@ -162,15 +162,19 @@ class MonoConDenseHeads(nn.Module):
         return self._get_predictions(feat)
     
     def forward_engine(self, feat,calib,viewpad,img_shape):
+        calib = calib.squeeze(0)
+        viewpad = viewpad.squeeze(0)
         pred_dict =  self._get_predictions(feat)
         # what all do we need to go from head outputs to 3D Detection?
         # 1. pad_shape
         # 2. calib matrix
         
-        bboxes_2d, bboxes_3d, labels = self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
-        # Convert origin of 'bboxes_3d' from (0.5, 0.5, 0.5) to (0.5, 1.0, 0.5)
-        bboxes_3d[:,:,1] += bboxes_3d[:,:,4]*0.5
-        return bboxes_2d, bboxes_3d, labels
+        feats  =  self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
+        return feats
+        # bboxes_2d, bboxes_3d, labels = self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
+        # # Convert origin of 'bboxes_3d' from (0.5, 0.5, 0.5) to (0.5, 1.0, 0.5)
+        # bboxes_3d[:,:,1] += bboxes_3d[:,:,4]*0.5
+        # return bboxes_2d, bboxes_3d, labels
 
 
     def _get_predictions(self, feat: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -435,7 +439,7 @@ class MonoConDenseHeads(nn.Module):
         batch, _, feat_h, feat_w = center_heatmap_pred.shape
         center_heatmap_pred = get_local_maximum(
             center_heatmap_pred, 
-            kernel=self.local_maximum_kernel)
+            kernel=3)
         
         # (B, K)
         scores, indices, topk_labels, ys, xs = \
@@ -521,8 +525,9 @@ class MonoConDenseHeads(nn.Module):
         center_heatmap_pred = get_local_maximum(
             center_heatmap_pred, 
             kernel=self.local_maximum_kernel)
+
         
-        # (B, K)
+        # # (B, K)
         scores, indices, topk_labels, ys, xs = \
             get_topk_from_heatmap(center_heatmap_pred, k=self.topk)
         
@@ -542,10 +547,10 @@ class MonoConDenseHeads(nn.Module):
         bboxes_2d = torch.cat([bboxes_2d, scores[..., None]], dim=-1)               # (B, K, 5)
         
         
-        # Get 3D Predictions from Predicted Heatmap
-        # 'sigma' represents uncertainty.
+        # # Get 3D Predictions from Predicted Heatmap
+        # # 'sigma' represents uncertainty.
         
-        # Convert bin class and offset to alpha.
+        # # Convert bin class and offset to alpha.
         alpha_cls = transpose_and_gather_feat(pred_dict['alpha_cls_pred'], indices)         # (B, K, 12)
         alpha_offset = transpose_and_gather_feat(pred_dict['alpha_offset_pred'], indices)   # (B, K, 12)
         alpha = self.decode_alpha(alpha_cls, alpha_offset)                                  # (B, K, 1)
@@ -567,18 +572,20 @@ class MonoConDenseHeads(nn.Module):
         
         center2kpt_offset[..., ::2] = (center2kpt_offset[..., ::2] + x_offset) * x_scale
         center2kpt_offset[..., 1::2] = (center2kpt_offset[..., 1::2] + y_offset) * y_scale
+        # return center2kpt_offset
         
         center2d = center2kpt_offset
         rot_y = self.calculate_roty_engine(center2d, alpha,calib)      # (B, K, 1)
+        return rot_y
         
-        depth = depth_pred[:, :, 0:1]                                                           # (B, K, 1)
-        center3d = torch.cat([center2d, depth], dim=-1)                                         # (B, K, 3)
-        center3d = self.convert_pts2D_to_pts3D_engine(center3d, viewpad)      # (B, K, 3)
+        # depth = depth_pred[:, :, 0:1]                                                           # (B, K, 1)
+        # center3d = torch.cat([center2d, depth], dim=-1)                                         # (B, K, 3)
+        # center3d = self.convert_pts2D_to_pts3D_engine(center3d, viewpad)      # (B, K, 3)
         
-        dim = transpose_and_gather_feat(pred_dict['dim_pred'], indices)
-        bboxes_3d = torch.cat([center3d, dim, rot_y], dim=-1)
+        # dim = transpose_and_gather_feat(pred_dict['dim_pred'], indices)
+        # bboxes_3d = torch.cat([center3d, dim, rot_y], dim=-1)
         
-        box_mask = (bboxes_2d[..., -1] > self.test_thres)                                   # (B, K)
+        # box_mask = (bboxes_2d[..., -1] > self.test_thres)                                   # (B, K)
         
         # Decoded Results
         # ret_bboxes_2d = bboxes_2d[:,box_mask.squeeze(0),:]
@@ -587,7 +594,7 @@ class MonoConDenseHeads(nn.Module):
         
         # ret_labels = topk_labels[:,box_mask.squeeze(0)]
         
-        return bboxes_2d, bboxes_3d, topk_labels
+        # return bboxes_2d, bboxes_3d, topk_labels
 
     def calculate_roty(self, 
                        kpts: torch.Tensor, 
@@ -715,17 +722,17 @@ class MonoConDenseHeads(nn.Module):
         
         device = kpts.device
         calib = calib.unsqueeze(0)
-        
+        # return calib
         # kpts[:, :, 0:1]       -> (B, K, 1)
         # calib[:, 0:1, 0:1]    -> (B, 1, 1)
 
         si = torch.zeros_like(kpts[:, :, 0:1]) + calib[:, 0:1, 0:1]
         rot_y = alpha + torch.atan(kpts[:, :, 0:1] - calib[:, 0:1, 2:3]/ si)
 
-        while (rot_y > PI).any():
-            rot_y[rot_y > PI] = rot_y[rot_y > PI] - 2 * PI
-        while (rot_y < -PI).any():
-            rot_y[rot_y < -PI] = rot_y[rot_y < -PI] + 2 * PI
+        # while (rot_y > PI).any():
+        #     rot_y[rot_y > PI] = rot_y[rot_y > PI] - 2 * PI
+        # while (rot_y < -PI).any():
+        #     rot_y[rot_y < -PI] = rot_y[rot_y < -PI] + 2 * PI
 
         return rot_y
 

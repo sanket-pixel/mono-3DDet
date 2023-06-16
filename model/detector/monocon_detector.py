@@ -50,20 +50,21 @@ class MonoConDetector(nn.Module):
         self.head = MonoConDenseHeads(in_ch=head_in_ch, test_config=test_config, **head_config)
         
         
-    def forward(self,img, calib, viewpad,return_loss=False ):
+    def forward(self,img, calib, viewpad):
         
+       
         img_shape = img.shape[2], img.shape[3]
         feat = self._extract_feat_from_data_dict(img)
         
-        if self.training:
-            pred_dict, loss_dict = self.head.forward_train(feat, img)
-            if return_loss:
-                return pred_dict, loss_dict
-            return pred_dict
-        
-        else:
-            bboxes_2d, bboxes_3d, labels = self.head.forward_engine(feat, calib,viewpad, img_shape)
-            return bboxes_2d, bboxes_3d, labels
+        # if self.training:
+        #     pred_dict, loss_dict = self.head.forward_train(feat, img)
+        #     if return_loss:
+        #         return pred_dict, loss_dict
+        #     return pred_dict
+        feats  = self.head.forward_engine(feat, calib,viewpad, img_shape)
+        return feats
+        # bboxes_2d, bboxes_3d, labels = self.head.forward_engine(feat, calib,viewpad, img_shape)
+        # return bboxes_2d, bboxes_3d, labels
         
     
     def batch_eval(self, 

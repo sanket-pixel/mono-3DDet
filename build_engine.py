@@ -85,16 +85,17 @@ with torch.no_grad():
     viewpad = torch.eye(4)
     viewpad[:calib.shape[0], :calib.shape[1]] = calib
     inv_viewpad = torch.linalg.inv(viewpad).transpose(0, 1).cuda()
-    bboxes_2d, bboxes_3d, labels = detector(img, calib, inv_viewpad)
+    # bboxes_2d, bboxes_3d, labels = detector(img, calib.unsqueeze(0), inv_viewpad.unsqueeze(0))
     tprint(f"Sample inference done with new weights.")
     ONNX_FILE_PATH = "deploy_tools/monocon.onnx"
     ENGINE_PATH = "deploy_tools/monocon.engine"
     input_names = ['image','calib','calib_inv']
-    output_names = ['bboxes_2d','bboxes_3d','labels']
-    torch.onnx.export(detector, (img, calib, inv_viewpad),ONNX_FILE_PATH, verbose=True, 
+    output_names = ['feat']
+    # output_names = ['bboxes_2d','bboxes_3d','labels']
+    torch.onnx.export(detector, (img, calib.unsqueeze(0), inv_viewpad.unsqueeze(0)),ONNX_FILE_PATH, verbose=True, 
                       input_names=input_names, output_names=output_names, export_params=True)
     tprint(f"ONNX for Monocon generated")
-    # build_engine_from_onnx(ONNX_FILE_PATH, ENGINE_PATH)
+    build_engine_from_onnx(ONNX_FILE_PATH, ENGINE_PATH)
     
 
     
