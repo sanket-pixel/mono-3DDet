@@ -90,8 +90,8 @@ with torch.no_grad():
     ONNX_FILE_PATH = "deploy_tools/monocon.onnx"
     ENGINE_PATH = "deploy_tools/monocon.engine"
     input_names = ['image','calib','calib_inv']
-    output_names = ['feat']
-    # output_names = ['bboxes_2d','bboxes_3d','labels']
+    # output_names = ['feat']
+    output_names = ['bboxes_2d','bboxes_3d','labels']
     torch.onnx.export(detector, (img, calib.unsqueeze(0), inv_viewpad.unsqueeze(0)),ONNX_FILE_PATH, verbose=True, 
                       input_names=input_names, output_names=output_names, export_params=True)
     tprint(f"ONNX for Monocon generated")

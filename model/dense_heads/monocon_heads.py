@@ -170,11 +170,11 @@ class MonoConDenseHeads(nn.Module):
         # 2. calib matrix
         
         feats  =  self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
-        return feats
-        # bboxes_2d, bboxes_3d, labels = self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
+        # return feats
+        bboxes_2d, bboxes_3d, labels = self.decode_heatmap_engine(calib,viewpad,img_shape,pred_dict)
         # # Convert origin of 'bboxes_3d' from (0.5, 0.5, 0.5) to (0.5, 1.0, 0.5)
-        # bboxes_3d[:,:,1] += bboxes_3d[:,:,4]*0.5
-        # return bboxes_2d, bboxes_3d, labels
+        bboxes_3d[:,:,1] += bboxes_3d[:,:,4]*0.5
+        return bboxes_2d, bboxes_3d, labels
 
 
     def _get_predictions(self, feat: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -424,8 +424,8 @@ class MonoConDenseHeads(nn.Module):
         alpha = (angle_center + alpha_offset)
 
         # Refine Angle
-        alpha[alpha > PI] = alpha[alpha > PI] - (2 * PI)
-        alpha[alpha < -PI] = alpha[alpha < -PI] + (2 * PI)
+        # alpha[alpha > PI] = alpha[alpha > PI] - (2 * PI)
+        # alpha[alpha < -PI] = alpha[alpha < -PI] + (2 * PI)
         return alpha
     
     
@@ -576,25 +576,25 @@ class MonoConDenseHeads(nn.Module):
         
         center2d = center2kpt_offset
         rot_y = self.calculate_roty_engine(center2d, alpha,calib)      # (B, K, 1)
-        return rot_y
+        # return rot_y
         
-        # depth = depth_pred[:, :, 0:1]                                                           # (B, K, 1)
-        # center3d = torch.cat([center2d, depth], dim=-1)                                         # (B, K, 3)
-        # center3d = self.convert_pts2D_to_pts3D_engine(center3d, viewpad)      # (B, K, 3)
+        depth = depth_pred[:, :, 0:1]                                                           # (B, K, 1)
+        center3d = torch.cat([center2d, depth], dim=-1)                                         # (B, K, 3)
+        center3d = self.convert_pts2D_to_pts3D_engine(center3d, viewpad)      # (B, K, 3)
         
-        # dim = transpose_and_gather_feat(pred_dict['dim_pred'], indices)
-        # bboxes_3d = torch.cat([center3d, dim, rot_y], dim=-1)
+        dim = transpose_and_gather_feat(pred_dict['dim_pred'], indices)
+        bboxes_3d = torch.cat([center3d, dim, rot_y], dim=-1)
         
         # box_mask = (bboxes_2d[..., -1] > self.test_thres)                                   # (B, K)
         
-        # Decoded Results
+        # # Decoded Results
         # ret_bboxes_2d = bboxes_2d[:,box_mask.squeeze(0),:]
         
         # ret_bboxes_3d = bboxes_3d[:,box_mask.squeeze(0),:]
         
         # ret_labels = topk_labels[:,box_mask.squeeze(0)]
         
-        # return bboxes_2d, bboxes_3d, topk_labels
+        return bboxes_2d, bboxes_3d, topk_labels
 
     def calculate_roty(self, 
                        kpts: torch.Tensor, 

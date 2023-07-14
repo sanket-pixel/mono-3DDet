@@ -62,9 +62,9 @@ class MonoConDetector(nn.Module):
         #         return pred_dict, loss_dict
         #     return pred_dict
         feats  = self.head.forward_engine(feat, calib,viewpad, img_shape)
-        return feats
-        # bboxes_2d, bboxes_3d, labels = self.head.forward_engine(feat, calib,viewpad, img_shape)
-        # return bboxes_2d, bboxes_3d, labels
+        # return feats
+        bboxes_2d, bboxes_3d, labels = self.head.forward_engine(feat, calib,viewpad, img_shape)
+        return bboxes_2d, bboxes_3d, labels
         
     
     def batch_eval(self, 
